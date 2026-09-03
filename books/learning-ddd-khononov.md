@@ -2,7 +2,7 @@
 
 # Изучаем DDD — предметно-ориентированное проектирование
 
-**Влад Хононов** · 2022 · `ddd` `architecture` `design` `microservices`
+**Влад Хононов** · 2024 · `ddd` `architecture` `design` `microservices`
 
 <sub>Оригинал: *Learning Domain-Driven Design*, Vlad Khononov · русское издание — БХВ-Петербург, 2024</sub>
 
