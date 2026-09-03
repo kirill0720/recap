@@ -10,7 +10,7 @@ BOOKS = ROOT / "books"
 ASSETS = BOOKS / "_assets"
 README = ROOT / "README.md"
 START, END = "<!-- index:start -->", "<!-- index:end -->"
-COVER_HEIGHT = 220
+COVER_WIDTH = 60
 
 
 def parse_page(text):
@@ -39,35 +39,17 @@ def cover(path):
     return png if png.exists() else None
 
 
-def shelf(books):
-    """Ряд обложек-ссылок: по обложке книга узнаётся раньше, чем прочитано название."""
-    covers = [(p, m) for p, m in books if cover(p)]
-    if not covers:
-        return []
-    rows = ["<p>"]
-    for path, meta in covers:
-        rows.append(
-            '  <a href="books/{name}"><img src="books/_assets/{slug}/cover.png"'
-            ' height="{h}" alt="{alt}"></a>'.format(
-                name=path.name, slug=path.stem, h=COVER_HEIGHT,
-                alt=meta["name"].replace('"', "'"),
-            )
-        )
-    rows.append("</p>")
-    return rows
-
-
-def card(path, meta):
-    head = ["**{}**".format(meta["author"]), meta["year"]]
-    if meta["tags"]:
-        head.append(" ".join("`{}`".format(t) for t in meta["tags"]))
-    lines = ["### [{}](books/{})".format(meta["name"], path.name), "", " · ".join(head)]
-    if meta["orig_title"]:
-        orig = "Оригинал: *{}*".format(meta["orig_title"])
-        if meta["orig_author"]:
-            orig += ", {}".format(meta["orig_author"])
-        lines += ["", "<sub>{}</sub>".format(orig)]
-    return lines
+def row(path, meta):
+    thumb = ('<img src="books/_assets/{}/cover.png" width="{}">'.format(path.stem, COVER_WIDTH)
+             if cover(path) else "")
+    return "| {} | [{}](books/{}) | {} | {} | {} |".format(
+        thumb,
+        meta["name"],
+        path.name,
+        meta["author"],
+        meta["year"],
+        ", ".join("`{}`".format(t) for t in meta["tags"]),
+    )
 
 
 def main():
@@ -80,9 +62,8 @@ def main():
         books.append((path, meta))
     books.sort(key=lambda b: b[1]["name"].lower())
 
-    block = shelf(books)
-    for path, meta in books:
-        block += [""] + card(path, meta)
+    block = ["|  | Книга | Автор | Год | Теги |", "|---|---|---|---|---|"]
+    block += [row(path, meta) for path, meta in books]
 
     text = README.read_text(encoding="utf-8")
     head, sep, rest = text.partition(START)

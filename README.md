@@ -4,8 +4,8 @@
 
 <!-- index:start -->
 
-|  | Книга | Автор | Год  | Теги                                     |
-|---|---|---|------|------------------------------------------|
+|  | Книга | Автор | Год | Теги |
+|---|---|---|---|---|
 | <img src="books/_assets/learning-ddd-khononov/cover.png" width="60"> | [Изучаем DDD — предметно-ориентированное проектирование](books/learning-ddd-khononov.md) | Влад Хононов | 2024 | `ddd`, `architecture`, `design`, `microservices` |
 
 <!-- index:end -->
