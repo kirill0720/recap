@@ -42,14 +42,12 @@ def row(path, fm):
     tags = fm.get("tags") or []
     if isinstance(tags, str):
         tags = [tags]
-    return "| {} | [{}](books/{}) | {} | {} | {} | {} | {} |".format(
+    return "| {} | [{}](books/{}) | {} | {} | {} |".format(
         thumb,
         name,
         path.name,
         fm.get("author") or "—",
         fm.get("year") or "—",
-        fm.get("lang_read") or "—",
-        fm.get("read") or "—",
         ", ".join(tags) or "—",
     )
 
@@ -63,11 +61,11 @@ def main():
             continue
         books.append((path, fm))
 
-    books.sort(key=lambda b: b[1].get("read") or "", reverse=True)
+    books.sort(key=lambda b: (b[1].get("title_ru") or b[1].get("title") or b[0].stem).lower())
 
     lines = [
-        "|  | Книга | Автор | Год | Яз. | Читал | Теги |",
-        "|---|---|---|---|---|---|---|",
+        "|  | Книга | Автор | Год | Теги |",
+        "|---|---|---|---|---|",
     ]
     lines += [row(p, fm) for p, fm in books]
     table = "\n".join(lines)
