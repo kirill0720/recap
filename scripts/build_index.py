@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Пересобирает список книг в README.md из frontmatter файлов books/*.md."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -12,29 +13,25 @@ START, END = "<!-- index:start -->", "<!-- index:end -->"
 COVER_HEIGHT = 220
 
 
-def parse_frontmatter(text):
-    if not text.startswith("---"):
-        return None
-    _, _, rest = text.partition("\n")
-    body, sep, _ = rest.partition("\n---")
-    if not sep:
-        return None
-    data = {}
-    for line in body.splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        key, sep, value = line.partition(":")
-        if not sep:
-            continue
-        value = value.split("  #")[0].strip()
-        if value.startswith("[") and value.endswith("]"):
-            value = [v.strip() for v in value[1:-1].split(",") if v.strip()]
-        data[key.strip()] = value
-    return data
+def parse_page(text):
+    """Метаданные берутся из шапки конспекта: заголовок, строка автора и строка оригинала.
 
-
-def display_name(path, fm):
-    return fm.get("title_ru") or fm.get("title") or path.stem
+    YAML-frontmatter не используется намеренно: GitHub рендерит его таблицей
+    поверх страницы книги.
+    """
+    title = re.search(r"^# (.+)$", text, re.M)
+    meta = re.search(r"^\*\*(?P<author>[^*]+)\*\*\s*·\s*(?P<year>\d{4})(?P<rest>.*)$", text, re.M)
+    if not title or not meta:
+        return None
+    orig = re.search(r"<sub>Оригинал:\s*\*(?P<title>[^*]+)\*(?:,\s*(?P<author>[^·<]+))?", text)
+    return {
+        "name": title.group(1).strip(),
+        "author": meta.group("author").strip(),
+        "year": meta.group("year"),
+        "tags": re.findall(r"`([^`]+)`", meta.group("rest")),
+        "orig_title": orig.group("title").strip() if orig else None,
+        "orig_author": (orig.group("author") or "").strip() if orig else None,
+    }
 
 
 def cover(path):
@@ -43,40 +40,32 @@ def cover(path):
 
 
 def shelf(books):
-    """Ряд обложек-ссылок: с ним книга узнаётся раньше, чем прочитано название."""
-    covers = [(p, fm) for p, fm in books if cover(p)]
+    """Ряд обложек-ссылок: по обложке книга узнаётся раньше, чем прочитано название."""
+    covers = [(p, m) for p, m in books if cover(p)]
     if not covers:
         return []
     rows = ["<p>"]
-    for path, fm in covers:
+    for path, meta in covers:
         rows.append(
             '  <a href="books/{name}"><img src="books/_assets/{slug}/cover.png"'
             ' height="{h}" alt="{alt}"></a>'.format(
                 name=path.name, slug=path.stem, h=COVER_HEIGHT,
-                alt=display_name(path, fm).replace('"', "'"),
+                alt=meta["name"].replace('"', "'"),
             )
         )
     rows.append("</p>")
     return rows
 
 
-def card(path, fm):
-    name = display_name(path, fm)
-    author = fm.get("author_ru") or fm.get("author")
-    tags = fm.get("tags") or []
-    if isinstance(tags, str):
-        tags = [tags]
-
-    meta = [x for x in ("**{}**".format(author) if author else "", str(fm.get("year") or "")) if x]
-    meta += [" ".join("`{}`".format(t) for t in tags)] if tags else []
-
-    lines = ["### [{}](books/{})".format(name, path.name), ""]
-    if meta:
-        lines += [" · ".join(meta)]
-    if fm.get("title_ru") and fm.get("title"):
-        orig = "Оригинал: *{}*".format(fm["title"])
-        if fm.get("author"):
-            orig += ", {}".format(fm["author"])
+def card(path, meta):
+    head = ["**{}**".format(meta["author"]), meta["year"]]
+    if meta["tags"]:
+        head.append(" ".join("`{}`".format(t) for t in meta["tags"]))
+    lines = ["### [{}](books/{})".format(meta["name"], path.name), "", " · ".join(head)]
+    if meta["orig_title"]:
+        orig = "Оригинал: *{}*".format(meta["orig_title"])
+        if meta["orig_author"]:
+            orig += ", {}".format(meta["orig_author"])
         lines += ["", "<sub>{}</sub>".format(orig)]
     return lines
 
@@ -84,16 +73,16 @@ def card(path, fm):
 def main():
     books = []
     for path in sorted(BOOKS.glob("*.md")):
-        fm = parse_frontmatter(path.read_text(encoding="utf-8"))
-        if fm is None:
-            print("пропускаю {}: нет frontmatter".format(path.name), file=sys.stderr)
+        meta = parse_page(path.read_text(encoding="utf-8"))
+        if meta is None:
+            print("пропускаю {}: не разобрал шапку".format(path.name), file=sys.stderr)
             continue
-        books.append((path, fm))
-    books.sort(key=lambda b: display_name(*b).lower())
+        books.append((path, meta))
+    books.sort(key=lambda b: b[1]["name"].lower())
 
     block = shelf(books)
-    for path, fm in books:
-        block += [""] + card(path, fm)
+    for path, meta in books:
+        block += [""] + card(path, meta)
 
     text = README.read_text(encoding="utf-8")
     head, sep, rest = text.partition(START)
