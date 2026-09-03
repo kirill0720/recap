@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Пересобирает таблицу книг в README.md из frontmatter файлов books/*.md."""
+"""Пересобирает список книг в README.md из frontmatter файлов books/*.md."""
 
 import sys
 from pathlib import Path
@@ -9,6 +9,7 @@ BOOKS = ROOT / "books"
 ASSETS = BOOKS / "_assets"
 README = ROOT / "README.md"
 START, END = "<!-- index:start -->", "<!-- index:end -->"
+COVER_HEIGHT = 220
 
 
 def parse_frontmatter(text):
@@ -32,24 +33,52 @@ def parse_frontmatter(text):
     return data
 
 
-def row(path, fm):
-    slug = path.stem
-    cover = ASSETS / slug / "cover.png"
-    thumb = (
-        f'<img src="books/_assets/{slug}/cover.png" width="60">' if cover.exists() else ""
-    )
-    name = fm.get("title_ru") or fm.get("title") or slug
+def display_name(path, fm):
+    return fm.get("title_ru") or fm.get("title") or path.stem
+
+
+def cover(path):
+    png = ASSETS / path.stem / "cover.png"
+    return png if png.exists() else None
+
+
+def shelf(books):
+    """Ряд обложек-ссылок: с ним книга узнаётся раньше, чем прочитано название."""
+    covers = [(p, fm) for p, fm in books if cover(p)]
+    if not covers:
+        return []
+    rows = ["<p>"]
+    for path, fm in covers:
+        rows.append(
+            '  <a href="books/{name}"><img src="books/_assets/{slug}/cover.png"'
+            ' height="{h}" alt="{alt}"></a>'.format(
+                name=path.name, slug=path.stem, h=COVER_HEIGHT,
+                alt=display_name(path, fm).replace('"', "'"),
+            )
+        )
+    rows.append("</p>")
+    return rows
+
+
+def card(path, fm):
+    name = display_name(path, fm)
+    author = fm.get("author_ru") or fm.get("author")
     tags = fm.get("tags") or []
     if isinstance(tags, str):
         tags = [tags]
-    return "| {} | [{}](books/{}) | {} | {} | {} |".format(
-        thumb,
-        name,
-        path.name,
-        fm.get("author") or "—",
-        fm.get("year") or "—",
-        ", ".join(tags) or "—",
-    )
+
+    meta = [x for x in ("**{}**".format(author) if author else "", str(fm.get("year") or "")) if x]
+    meta += [" ".join("`{}`".format(t) for t in tags)] if tags else []
+
+    lines = ["### [{}](books/{})".format(name, path.name), ""]
+    if meta:
+        lines += [" · ".join(meta)]
+    if fm.get("title_ru") and fm.get("title"):
+        orig = "Оригинал: *{}*".format(fm["title"])
+        if fm.get("author"):
+            orig += ", {}".format(fm["author"])
+        lines += ["", "<sub>{}</sub>".format(orig)]
+    return lines
 
 
 def main():
@@ -57,30 +86,28 @@ def main():
     for path in sorted(BOOKS.glob("*.md")):
         fm = parse_frontmatter(path.read_text(encoding="utf-8"))
         if fm is None:
-            print(f"пропускаю {path.name}: нет frontmatter", file=sys.stderr)
+            print("пропускаю {}: нет frontmatter".format(path.name), file=sys.stderr)
             continue
         books.append((path, fm))
+    books.sort(key=lambda b: display_name(*b).lower())
 
-    books.sort(key=lambda b: (b[1].get("title_ru") or b[1].get("title") or b[0].stem).lower())
-
-    lines = [
-        "|  | Книга | Автор | Год | Теги |",
-        "|---|---|---|---|---|",
-    ]
-    lines += [row(p, fm) for p, fm in books]
-    table = "\n".join(lines)
+    block = shelf(books)
+    for path, fm in books:
+        block += [""] + card(path, fm)
 
     text = README.read_text(encoding="utf-8")
     head, sep, rest = text.partition(START)
     if not sep:
-        sys.exit(f"в README.md нет маркера {START}")
+        sys.exit("в README.md нет маркера {}".format(START))
     _, sep, tail = rest.partition(END)
     if not sep:
-        sys.exit(f"в README.md нет маркера {END}")
-    README.write_text(f"{head}{START}\n\n{table}\n\n{END}{tail}", encoding="utf-8")
-
-    with_cover = sum(1 for p, _ in books if (ASSETS / p.stem / "cover.png").exists())
-    print(f"README.md обновлён. Книг: {len(books)}, с обложкой: {with_cover}")
+        sys.exit("в README.md нет маркера {}".format(END))
+    README.write_text(
+        "{}{}\n\n{}\n\n{}{}".format(head, START, "\n".join(block).strip("\n"), END, tail),
+        encoding="utf-8",
+    )
+    print("README.md обновлён. Книг: {}, с обложкой: {}".format(
+        len(books), sum(1 for p, _ in books if cover(p))))
 
 
 if __name__ == "__main__":

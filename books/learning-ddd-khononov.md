@@ -1,9 +1,9 @@
 ---
 title: Learning Domain-Driven Design
+author: Vlad Khononov
 title_ru: Изучаем DDD — предметно-ориентированное проектирование
-author: Влад Хононов
+author_ru: Влад Хононов
 year: 2022
-pages: 320
 tags: [ddd, architecture, design, microservices]
 ---
 
